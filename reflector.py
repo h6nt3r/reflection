@@ -5,6 +5,7 @@ import argparse
 from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
 import time
 import sys
+import charset_normalizer
 
 # Set the timeout limit (in seconds)
 TIMEOUT = 10
@@ -79,7 +80,7 @@ def main():
     print_banner()
 
     parser = argparse.ArgumentParser(description="Reflection Checker")
-    parser.add_argument("-s", "--stdio", action="store_true", help="Read URLs from stdin")
+    parser.add_argument("-f", "--file", type=str, help="Path to the text file containing URLs")
     parser.add_argument("-u", "--url", type=str, help="Single URL to scan")
     parser.add_argument("--threads", type=int, default=5, help="Number of threads to use (default: 5)")
     parser.add_argument("-o", "--output", type=str, default="xss.txt", help="Output file for saving results (default: xss.txt)")
@@ -89,7 +90,24 @@ def main():
 
     urls = []
 
-    if args.stdio:
+    if args.file:
+        try:
+            with open(args.file, 'rb') as f:
+                detected = charset_normalizer.detect(f.read())
+            encoding = detected['encoding'] or 'utf-8'
+
+            with open(args.file, 'r', encoding=encoding) as f:
+                urls = [line.strip() for line in f if line.strip()]
+            total_urls = len(urls)
+        except Exception as e:
+            print(f"{RED}Error reading file: {str(e)}{RESET}")
+            return
+
+    elif args.url:
+        urls.append(args.url.strip())
+        total_urls = 1
+
+    else:  # If no command-line argument is provided, read from stdin
         try:
             for line in sys.stdin:
                 url = line.strip()
@@ -99,12 +117,9 @@ def main():
         except KeyboardInterrupt:
             print("\n" + RED + "Scanning interrupted." + RESET)
             return
-    elif args.url:
-        urls.append(args.url.strip())
-        total_urls = 1
 
     if not urls:
-        print(f"{RED}Error: No URLs provided. Use either -s/--stdio, -u/--url, or provide URLs via stdin.{RESET}")
+        print(f"{RED}Error: No URLs provided. Please provide URLs via -f/--file, -u/--url, or through stdin.{RESET}")
         return
 
     # Set the output file
